@@ -9,7 +9,7 @@ from supabase import create_client, Client
 # Check if running in GitHub Actions (Automation Mode)
 if os.environ.get("GITHUB_ACTIONS") == "true":
     print("🤖 AUTOMATION MODE: Syncing last 3 days...")
-    START_DATE = date.today() - timedelta(days=3)
+    START_DATE = date.today() - timedelta(days=30)
     END_DATE = date.today()
 else:
     # MANUAL RE-RUN: Set this to your full history start date
