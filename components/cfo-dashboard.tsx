@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,15 +13,16 @@ import {
   Lightbulb,
   Target,
   Building2,
-  CreditCard,
-  Landmark,
   Receipt,
   Globe,
   Package,
+  Loader2,
 } from "lucide-react"
 import { useNavigation } from "@/contexts/navigation-context"
 import { AIDailyInsight } from "./ai-daily-insight"
+import { useCFODashboardData } from "@/hooks/use-cfo-data"
 
+// --- STATIC DATA (Placeholders) ---
 const stockAlerts = [
   { product: "Warming Oils", daysToStockout: 30, reorderBy: "Dec 1", status: "healthy" },
   { product: "Cooling Roller", daysToStockout: 9, reorderBy: "OVERDUE", status: "critical" },
@@ -28,22 +30,6 @@ const stockAlerts = [
   { product: "Neuro Supplement", daysToStockout: 8, reorderBy: "OVERDUE", status: "critical" },
   { product: "Vein Supplement", daysToStockout: 26, reorderBy: "Dec 1", status: "healthy" },
 ]
-
-const mrrForecast = {
-  currentMRR: 37455,
-  projectedMRR: 41200,
-  newSubsForecast: 127,
-  churnForecast: 42,
-  growthPercent: 10.0,
-}
-
-const revenueForecast = {
-  projectedRevenue: 128400,
-  currentAdSpend: 18432,
-  avgROAS: 6.8,
-  conversionTrend: "+4.2%",
-  confidence: "High",
-}
 
 const globalProfitability = [
   { market: "USA", revenue: 68420, cm: 32.4, status: "healthy" },
@@ -59,42 +45,6 @@ const processorHealth = {
   cashOnHold: 4200,
   disputeThreshold: 0.8,
 }
-
-const cashProjectionData = (() => {
-  const data = []
-  let currentCash = 142500
-  const dailyBurn = 780
-
-  for (let i = 0; i <= 90; i++) {
-    const date = new Date()
-    date.setDate(date.getDate() + i)
-
-    let dayAdjustment = 0
-    if (i === 15) dayAdjustment = -18000
-    if (i === 31) dayAdjustment = -12000
-    if (i === 45) dayAdjustment = 25000
-
-    const dailyRevenue = 3800 + Math.random() * 800
-    const netDaily = dailyRevenue - dailyBurn + (Math.random() - 0.5) * 400
-
-    currentCash = currentCash + netDaily + dayAdjustment
-
-    data.push({
-      day: i,
-      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      cash: Math.round(currentCash),
-      event: i === 15 ? "Supplier: -$18k" : i === 31 ? "Bonuses: -$12k" : i === 45 ? "Revenue spike" : null,
-    })
-  }
-  return data
-})()
-
-const cashByAccount = [
-  { name: "Stripe", balance: 58420, color: "#6366f1", icon: CreditCard, percentage: 41 },
-  { name: "PayPal", balance: 28400, color: "#0070ba", icon: Building2, percentage: 20 },
-  { name: "Bank (Chase)", balance: 42680, color: "#22d3ee", icon: Landmark, percentage: 30 },
-  { name: "Petty Cash", balance: 13000, color: "#94a3b8", icon: Wallet, percentage: 9 },
-]
 
 const accountsPayable = [
   { vendor: "Supplier A (Inventory)", amount: 18000, dueDate: "Dec 15", daysUntil: 20, priority: "high" },
@@ -115,40 +65,52 @@ const financialIssues = [
   },
 ]
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload
-    return (
-      <div className="bg-card-elevated border border-border rounded-lg p-3 shadow-xl">
-        <p className="text-sm font-medium text-foreground mb-1">{label}</p>
-        <p className="text-lg font-bold text-foreground">${(data.cash / 1000).toFixed(1)}k</p>
-        {data.event && <p className="text-xs text-coral mt-1 font-medium">{data.event}</p>}
-      </div>
-    )
-  }
-  return null
-}
-
 export function CFODashboard() {
   const { setActiveSheet } = useNavigation()
 
-  const currentCash = 142500
-  const monthlyBurn = 23400
+  // 1. STATE: Manage Date Range (Default: Last 30 Days)
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)),
+    end: new Date(),
+  })
+
+  // 2. DATA: Fetch Real Data based on selected dates
+  const { metrics, isLoading } = useCFODashboardData(dateRange.start, dateRange.end)
+
+  // Handlers for Date Inputs
+  const handleStartChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = new Date(e.target.value)
+    if (!isNaN(newDate.getTime())) {
+      setDateRange((prev) => ({ ...prev, start: newDate }))
+    }
+  }
+
+  const handleEndChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = new Date(e.target.value)
+    if (!isNaN(newDate.getTime())) {
+      setDateRange((prev) => ({ ...prev, end: newDate }))
+    }
+  }
+
+  const formatDateForInput = (date: Date) => date.toISOString().split("T")[0]
+
+  // 3. LOGIC: Hybrid Calculations
+  const baseCash = 142500 // Simulated starting balance
+  const currentCash = baseCash + metrics.totalRevenue // Real revenue adds to cash pile
+
+  const monthlyBurn = 23400 // Fixed burn rate placeholder
   const runway = (currentCash / monthlyBurn).toFixed(1)
   const isRunwaySafe = Number.parseFloat(runway) > 3
 
-  const monthlyNetGain = 3100 // Assuming slight profitability
-  const targetCash = 500000
-  const monthsToTarget = Math.ceil((targetCash - currentCash) / monthlyNetGain)
-  const targetDate = new Date()
-  targetDate.setMonth(targetDate.getMonth() + monthsToTarget)
-
-  const totalDailyCost = financialIssues.reduce((sum, issue) => sum + issue.dailyCost, 0)
-  const totalMonthlyCost = financialIssues.reduce((sum, issue) => sum + issue.impact30Day, 0)
-  const totalCash = cashByAccount.reduce((sum, acc) => sum + acc.balance, 0)
   const totalPayable = accountsPayable.reduce((sum, item) => sum + item.amount, 0)
-
   const criticalStock = stockAlerts.filter((s) => s.status === "critical").length
+
+  const cashByAccount = [
+    { name: "Stripe", balance: currentCash * 0.41, color: "#6366f1", icon: Building2, percentage: 41 },
+    { name: "PayPal", balance: currentCash * 0.2, color: "#0070ba", icon: Globe, percentage: 20 },
+    { name: "Bank (Chase)", balance: currentCash * 0.3, color: "#22d3ee", icon: Wallet, percentage: 30 },
+    { name: "Petty Cash", balance: currentCash * 0.09, color: "#94a3b8", icon: Receipt, percentage: 9 },
+  ]
 
   const getCMStatusColor = (cm: number) => {
     if (cm > 25) return { bg: "bg-success/10", text: "text-success", border: "border-success/20" }
@@ -156,10 +118,18 @@ export function CFODashboard() {
     return { bg: "bg-coral/10", text: "text-coral", border: "border-coral/20" }
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="space-y-2">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Header with Date Filter */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
             <Wallet className="w-5 h-5 text-primary" />
@@ -169,6 +139,29 @@ export function CFODashboard() {
             <p className="text-muted-foreground text-sm">
               Cash flow, runway, market profitability & financial strategy
             </p>
+          </div>
+        </div>
+
+        {/* Date Filter Controls */}
+        <div className="flex items-center gap-2 bg-card border border-border p-2 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium px-1">From</span>
+            <input
+              type="date"
+              value={formatDateForInput(dateRange.start)}
+              onChange={handleStartChange}
+              className="text-sm bg-transparent border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div className="w-px h-4 bg-border"></div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium px-1">To</span>
+            <input
+              type="date"
+              value={formatDateForInput(dateRange.end)}
+              onChange={handleEndChange}
+              className="text-sm bg-transparent border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
           </div>
         </div>
       </div>
@@ -184,7 +177,9 @@ export function CFODashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-foreground">${(currentCash / 1000).toFixed(1)}k</p>
-            <p className="text-sm text-muted-foreground mt-1">Across all accounts</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Includes ${(metrics.totalRevenue / 1000).toFixed(1)}k revenue from selected period
+            </p>
           </CardContent>
         </Card>
 
@@ -330,7 +325,7 @@ export function CFODashboard() {
                 Cash by Account
               </CardTitle>
               <span className="text-sm text-muted-foreground">
-                Total: <span className="text-foreground font-medium">${(totalCash / 1000).toFixed(1)}k</span>
+                Total: <span className="text-foreground font-medium">${(currentCash / 1000).toFixed(1)}k</span>
               </span>
             </div>
           </CardHeader>
@@ -362,7 +357,7 @@ export function CFODashboard() {
             {cashByAccount[0].percentage > 40 && (
               <p className="text-xs text-warning mt-4 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
-                High concentration in Stripe ({cashByAccount[0].percentage}%) - consider diversifying
+                High concentration in Stripe ({Math.round(cashByAccount[0].percentage)}%) - consider diversifying
               </p>
             )}
           </CardContent>

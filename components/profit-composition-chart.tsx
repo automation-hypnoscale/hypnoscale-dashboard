@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 import { Layers } from "lucide-react"
 
@@ -115,6 +115,14 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export function ProfitCompositionChart() {
+  // 1. Add "mounted" state to prevent server/client mismatch
+  const [mounted, setMounted] = useState(false)
+
+  // 2. Set mounted to true only after component loads in browser
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const chartData = useMemo(() => generateChartData(), [])
 
   const totals = useMemo(() => {
@@ -124,6 +132,11 @@ export function ProfitCompositionChart() {
     const avgMargin = ((totalProfit / totalRevenue) * 100).toFixed(1)
     return { totalProfit, avgDailyProfit, avgMargin }
   }, [chartData])
+
+  // 3. Show a loading skeleton if not mounted yet
+  if (!mounted) {
+    return <div className="h-[500px] w-full bg-gray-100/50 animate-pulse rounded-2xl" />
+  }
 
   return (
     <section className="bg-white border-2 border-gray-900 rounded-2xl p-6 space-y-5">
