@@ -22,6 +22,7 @@ jobs:
 
       - name: Run Data Sync
         env:
+          PYTHONUNBUFFERED: "1"        # <--- Add this!
           CHECKOUT_CHAMP_ID: ${{ secrets.CHECKOUT_CHAMP_ID }}
           CHECKOUT_CHAMP_PASS: ${{ secrets.CHECKOUT_CHAMP_PASS }}
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
