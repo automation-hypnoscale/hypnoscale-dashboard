@@ -40,6 +40,8 @@ def determine_event_type(raw):
         return 'refunded', 'Refund'
     if order_status == 'CANCELLED':
         return 'cancelled', 'Cancelled'
+    if order_status == 'CHARGEBACK':
+        return 'chargeback', 'Chargeback'
     
     if order_type == 'NEW_SALE' or order_type == 'SALE':
         return 'sale_new', 'Cold Traffic Revenue'
@@ -61,8 +63,8 @@ def fetch_orders_for_date(target_date):
         "password": CHECKOUT_CHAMP_PASS,
         "startDate": formatted_date,
         "endDate": formatted_date,
-        "resultsPerPage": 200,
-        "orderStatus": "COMPLETE"
+        "resultsPerPage": 200
+        # ❌ REMOVED: "orderStatus": "COMPLETE" to allow Refunds/Cancels
     }
 
     try:
@@ -70,7 +72,6 @@ def fetch_orders_for_date(target_date):
         json_resp = response.json()
         
         # 🐛 FIX: Safe Unpacking Logic
-        # Sometimes 'message' is a Dictionary (Success), sometimes a String (Error)
         raw_orders = json_resp.get('data')
         
         if not raw_orders:
@@ -82,23 +83,37 @@ def fetch_orders_for_date(target_date):
                 # If message is text (e.g. "No records found"), stop here
                 if "totalResults" not in str(json_resp): 
                     # Only print if it's an actual error, not just '0 results'
-                    print(f"   ⚠️ API ERROR: {msg}")  # <--- DEBUGGING LINE ADDED
+                    print(f"   ⚠️ API ERROR: {msg}") 
                 raw_orders = []
 
         if not raw_orders:
             print("0 orders.")
             return []
 
-        print(f"✅ Found {len(raw_orders)} orders!")
         clean_orders = []
+        skipped_count = 0
         
         for raw in raw_orders:
+            # --- 🛡️ FILTER: SKIP JUNK & TESTS ---
+            
+            # 1. Skip Declined/Failed
+            status = raw.get('orderStatus', '').upper()
+            if status in ['DECLINED', 'FAILED', 'ERROR', 'PENDING']:
+                skipped_count += 1
+                continue
+            
+            # 2. Skip TEST transactions (Crucial Step)
+            is_test = raw.get('test') # Usually boolean True/False or 1/0
+            if is_test is True or str(is_test).lower() in ['true', '1']:
+                skipped_count += 1
+                continue
+
             # --- LOGIC MAPPING ---
             event_type, revenue_type = determine_event_type(raw)
             
-            # Handle Refund Values
+            # Handle Refund Values (Make them negative)
             total_amount = float(raw.get('totalAmount', 0) or 0)
-            if event_type in ['refunded', 'cancelled']:
+            if event_type in ['refunded', 'cancelled', 'chargeback']:
                 total_amount = -abs(total_amount)
 
             # --- ITEM PARSING ---
@@ -128,7 +143,7 @@ def fetch_orders_for_date(target_date):
                 "order_id": raw.get('orderId'),
                 "date": raw.get('dateCreated'),
                 "total_amount": total_amount,
-                "status": "sale",
+                "status": "sale", # This stays generic, 'event_type' handles the specific status
                 "event_type": event_type,
                 "revenue_type": revenue_type,
                 "payment_status": raw.get('orderStatus'),
@@ -144,6 +159,7 @@ def fetch_orders_for_date(target_date):
                 "items": clean_items
             })
         
+        print(f"✅ Found {len(clean_orders)} valid orders! (Skipped {skipped_count} ignored)")
         return clean_orders
 
     except Exception as e:
@@ -164,7 +180,7 @@ def run_backfill():
         if orders:
             total_imported += len(orders)
             for order in orders:
-                # 1. Upsert Transaction
+                # 1. Upsert Transaction (Overwrites if exists = Handles Status Changes)
                 trans_data = {k:v for k,v in order.items() if k != "items"}
                 
                 try:
@@ -172,9 +188,15 @@ def run_backfill():
                 except Exception as e:
                     print(f"⚠️ Error saving transaction {order['transaction_id']}: {e}")
 
-                # 2. Upsert Items
+                # 2. CLEAN UP OLD ITEMS (Crucial step to prevent duplicates)
+                try:
+                    supabase.table("transaction_items").delete().eq("transaction_id", order["transaction_id"]).execute()
+                except:
+                    pass # Ignore if none existed
+
+                # 3. Insert Fresh Items
                 for item in order["items"]:
-                    # Ensure Product Map exists
+                    # Product Map (Only insert if new)
                     pid = str(item["external_product_id"])
                     try:
                         exists = supabase.table("product_map").select("product_id").eq("product_id", pid).execute()
