@@ -82,7 +82,7 @@ def fetch_orders_for_date(target_date):
                 # If message is text (e.g. "No records found"), stop here
                 if "totalResults" not in str(json_resp): 
                     # Only print if it's an actual error, not just '0 results'
-                    pass
+                    print(f"   ⚠️ API ERROR: {msg}")  # <--- DEBUGGING LINE ADDED
                 raw_orders = []
 
         if not raw_orders:
@@ -151,7 +151,9 @@ def fetch_orders_for_date(target_date):
         return []
 
 def run_backfill():
-    print(f"\n🚀 STARTING INTELLIGENT BACKFILL ({START_DATE} to {END_DATE})\n")
+    print(f"\n🚀 STARTING INTELLIGENT BACKFILL ({START_DATE} to {END_DATE})")
+    # Debug print to confirm ID is being read (only shows first 4 chars)
+    print(f"   🔑 Using Login ID: {str(CHECKOUT_CHAMP_ID)[:4]}****") 
     
     current_date = START_DATE
     total_imported = 0
