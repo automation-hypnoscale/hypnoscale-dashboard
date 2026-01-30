@@ -25,8 +25,8 @@ elif os.environ.get("GITHUB_ACTIONS") == "true":
 else:
     # MANUAL RE-RUN (Local Computer)
     print("🛠️ MANUAL MODE: Backfilling from Dec 27...")
-    START_DATE = date(2025, 12, 27) 
-    END_DATE = date(2026, 2, 28)
+    START_DATE = date(2026, 1, 13) 
+    END_DATE = date(2026, 2, 2)
 
 # --- 🔐 CREDENTIALS ---
 load_dotenv(".env.local")

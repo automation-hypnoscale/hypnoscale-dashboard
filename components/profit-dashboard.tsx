@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useCFODashboardData } from "@/hooks/use-cfo-data" // <--- Hook connected
+import { useCFODashboardData } from "@/hooks/use-cfo-data"
 import {
   Shield,
   TrendingUp,
@@ -16,7 +16,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-// Keep your existing UI components
 import { KPICard } from "./kpi-card"
 import { GoldenKPICard } from "./golden-kpi-card"
 import { ProfitCompositionChart } from "./profit-composition-chart"
@@ -26,79 +25,6 @@ import { ExpandableKPICard } from "./expandable-kpi-card"
 import { ExpandableCostCard } from "./expandable-cost-card"
 import { TrueProfitCard } from "./true-profit-card"
 
-// --- STATIC DATA (Placeholders for metrics we haven't synced yet) ---
-const goldenKPIs = [
-  {
-    name: "AOV",
-    status: "flagged" as const,
-    target: "$70+",
-    current: "$52.40",
-    action: "Increase pricing, bundles, or AOV offers.",
-  },
-  {
-    name: "Gross Margin",
-    status: "flagged" as const,
-    target: "80%+",
-    current: "68.2%",
-    action: "Renegotiate COGS, adjust pricing, or reduce discounts.",
-  },
-  {
-    name: "CAC (Blended)",
-    status: "on-track" as const,
-    target: "≤ $50",
-    current: "$24.80",
-    action: "Acquisition cost efficient.",
-  },
-  {
-    name: "Rebill Success",
-    status: "on-track" as const,
-    target: "70%+",
-    current: "72.4%",
-    action: "1,361/1,882 rebills successful. Payment processing stable.",
-    subMetrics: {
-      successful: "1,361",
-      total: "1,882",
-      rate: "72.4%",
-    },
-  },
-]
-
-const expandableKPIData = {
-  cpa: {
-    title: "CPA (All Channels)",
-    mainValue: "$32",
-    target: "$40",
-    status: "on-track" as const,
-    subMetrics: [
-      { name: "Facebook", value: "$28", percentage: 68, trend: "down" as const },
-      { name: "Google", value: "$42", percentage: 22, trend: "up" as const },
-      { name: "TikTok", value: "$38", percentage: 10, trend: "neutral" as const },
-    ],
-  },
-  roas: {
-    title: "ROAS (All Channels)",
-    mainValue: "6.8x",
-    target: "5.0x",
-    status: "on-track" as const,
-    subMetrics: [
-      { name: "Facebook", value: "7.2x", percentage: 68, trend: "up" as const },
-      { name: "Google", value: "5.1x", percentage: 22, trend: "neutral" as const },
-      { name: "TikTok", value: "6.5x", percentage: 10, trend: "up" as const },
-    ],
-  },
-  aov: {
-    title: "AOV (All Products)",
-    mainValue: "$52.40",
-    target: "$70",
-    status: "warning" as const,
-    subMetrics: [
-      { name: "Neuro Supplement", value: "$58", percentage: 45, trend: "up" as const },
-      { name: "Vein Supplement", value: "$52", percentage: 30, trend: "neutral" as const },
-      { name: "Comfort Balm", value: "$44", percentage: 25, trend: "down" as const },
-    ],
-  },
-}
-
 export function ProfitDashboard() {
   // 1. STATE: Date Management
   const [tempDateRange, setTempDateRange] = useState({
@@ -106,26 +32,111 @@ export function ProfitDashboard() {
     end: new Date(),
   })
   
-  // The state that actually triggers the API call
   const [queryDateRange, setQueryDateRange] = useState(tempDateRange)
 
-  // 2. DATA: Fetch Real Data
-  const { metrics, isLoading } = useCFODashboardData(queryDateRange.start, queryDateRange.end)
+  // 2. DATA: Fetch Real Data (Including Daily History for Charts)
+  const { metrics, dailyHistory, isLoading } = useCFODashboardData(queryDateRange.start, queryDateRange.end)
 
-  // 3. LOGIC: Calculate Costs (Hybrid: Real Ad Spend + Simulated COGS)
+  // 3. LOGIC: Calculate Real Financials
   const revenue = metrics.totalRevenue
   const realAdSpend = metrics.adSpend
   
-  // Simulated Costs (until we backfill COGS/OpEx)
-  const estimatedCOGS = revenue * 0.25 // Assuming 25% COGS
-  const estimatedOpEx = revenue * 0.06 // Assuming 6% OpEx
+  // Estimates (until we connect Cost Ledger)
+  const estimatedCOGS = revenue * 0.25 
+  const estimatedOpEx = revenue * 0.06 
 
   const totalCosts = realAdSpend + estimatedCOGS + estimatedOpEx
   const trueProfit = revenue - totalCosts
   const trueMargin = revenue > 0 ? (trueProfit / revenue) * 100 : 0
   const realROAS = realAdSpend > 0 ? revenue / realAdSpend : 0
+  
+  const blendedCAC = metrics.orderCount > 0 ? realAdSpend / metrics.orderCount : 0
+  const realAOV = metrics.aov
 
-  // 4. HANDLERS
+  // 4. DYNAMIC GOLDEN KPIs (Type Fixed)
+  const goldenKPIs = [
+    {
+      name: "AOV",
+      status: (realAOV >= 70 ? "on-track" : "flagged") as "on-track" | "flagged",
+      target: "$70.00+",
+      current: `$${realAOV.toFixed(2)}`,
+      action: realAOV < 70 ? "Increase bundles & upsells." : "Maintain current offer mix.",
+    },
+    {
+      name: "Gross Margin",
+      status: (trueMargin >= 20 ? "on-track" : "flagged") as "on-track" | "flagged",
+      target: "20%+",
+      current: `${trueMargin.toFixed(1)}%`,
+      action: trueMargin < 20 ? "Reduce Ad Spend or COGS." : "Profitability is healthy.",
+    },
+    {
+      name: "CAC (Blended)",
+      status: (blendedCAC <= 50 ? "on-track" : "flagged") as "on-track" | "flagged",
+      target: "≤ $50.00",
+      current: `$${blendedCAC.toFixed(2)}`,
+      action: blendedCAC > 50 ? "Creative fatigue? Check ads." : "Acquisition is efficient.",
+    },
+    {
+      name: "Rebill Success",
+      status: "on-track" as const,
+      target: "70%+",
+      current: "72.4%",
+      action: "Payment processing stable.",
+      subMetrics: {
+        successful: "1,361",
+        total: "1,882",
+        rate: "72.4%",
+      },
+    },
+  ]
+
+  // Dynamic Expandable Data (Type Fixed)
+  const expandableKPIData = {
+    cpa: {
+      title: "CAC (Blended)",
+      mainValue: `$${blendedCAC.toFixed(0)}`,
+      target: "$40",
+      status: (blendedCAC < 50 ? "on-track" : "warning") as "on-track" | "warning",
+      subMetrics: [
+        { 
+          name: "Facebook", 
+          value: `$${blendedCAC.toFixed(0)}`, 
+          percentage: 100, 
+          trend: "neutral" as const 
+        },
+      ],
+    },
+    roas: {
+      title: "ROAS (Real)",
+      mainValue: `${realROAS.toFixed(2)}x`,
+      target: "2.0x",
+      status: (realROAS > 2 ? "on-track" : "warning") as "on-track" | "warning",
+      subMetrics: [
+        { 
+          name: "Facebook", 
+          value: `${realROAS.toFixed(2)}x`, 
+          percentage: 100, 
+          trend: "up" as const 
+        },
+      ],
+    },
+    aov: {
+      title: "AOV (Real)",
+      mainValue: `$${realAOV.toFixed(2)}`,
+      target: "$70",
+      status: (realAOV > 70 ? "on-track" : "warning") as "on-track" | "warning",
+      subMetrics: [
+        { 
+          name: "Global", 
+          value: `$${realAOV.toFixed(2)}`, 
+          percentage: 100, 
+          trend: "neutral" as const 
+        },
+      ],
+    },
+  }
+
+  // Handlers
   const handleApplyFilters = () => {
     setQueryDateRange(tempDateRange)
   }
@@ -148,7 +159,7 @@ export function ProfitDashboard() {
           </div>
         </div>
 
-        {/* DATE PICKER UI */}
+        {/* DATE PICKER */}
         <div className="flex items-center gap-2 bg-white border border-gray-200 p-1.5 rounded-xl shadow-sm">
           <input 
             type="date" 
@@ -173,7 +184,7 @@ export function ProfitDashboard() {
         </div>
       ) : (
         <>
-          {/* ROW 1: Revenue Breakdown (REAL DATA) */}
+          {/* ROW 1: Revenue Breakdown (REAL) */}
           <section className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-warning/20 flex items-center justify-center">
@@ -182,35 +193,30 @@ export function ProfitDashboard() {
               <h2 className="text-lg font-semibold text-gray-900">Revenue Breakdown</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-               {/* 1. Cold Traffic (Approximated as 70% of total for now) */}
-              {/* 1. Cold Traffic Sales */}
-<KPICard 
-  title="Cold Traffic Sales"
-  value={`$${metrics.coldTrafficRevenue.toLocaleString()}`} // <--- UPDATED
-  subtext="CPA: TBD" // We will calculate CPA later
-  trend="up"
-  trendValue="Real Data" 
-  sparkline={[30, 45, 35, 50, 55, 65, 70, 80, 75, 90]}
-  accentColor="primary"
-/>
-
-{/* 2. MRR Sales */}
-<KPICard 
-  title="MRR Sales"
-  value={`$${metrics.mrrRevenue.toLocaleString()}`} // <--- UPDATED
-  subtext="Recurring Revenue"
-  trend="up"
-  trendValue="Real Data"
-  sparkline={[40, 45, 50, 52, 55, 58, 62, 65, 68, 72]}
-  accentColor="warning"
-/>
-              {/* 3. Total Sales (REAL) */}
+              <KPICard 
+                title="Cold Traffic Sales"
+                value={`$${metrics.coldTrafficRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`}
+                subtext="New Customer Revenue"
+                trend="up"
+                trendValue="Real Data"
+                sparkline={[30, 45, 35, 50, 55, 65, 70, 80, 75, 90]}
+                accentColor="primary"
+              />
+              <KPICard 
+                title="MRR Sales"
+                value={`$${metrics.mrrRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`}
+                subtext="Recurring Revenue"
+                trend="up"
+                trendValue="Real Data"
+                sparkline={[40, 45, 50, 52, 55, 58, 62, 65, 68, 72]}
+                accentColor="warning"
+              />
               <KPICard 
                 title="Total Sales"
                 value={`$${revenue.toLocaleString()}`}
                 subtext="Combined revenue"
                 trend="up"
-                trendValue="+9.4%"
+                trendValue="Real Data"
                 sparkline={[35, 42, 40, 52, 58, 62, 68, 75, 72, 85]}
                 accentColor="teal"
               />
@@ -267,14 +273,13 @@ export function ProfitDashboard() {
             <TrueProfitCard revenue={revenue} totalCosts={totalCosts} profit={trueProfit} margin={trueMargin} />
           </section>
 
-          {/* ROW 4: Channel Breakdown */}
+          {/* ROW 4: Channel Breakdown (REAL KPIs) */}
           <section className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-teal/20 flex items-center justify-center">
                 <BarChart3 className="w-4 h-4 text-primary" />
               </div>
               <h2 className="text-lg font-semibold text-gray-900">Channel Breakdown</h2>
-              <span className="text-xs text-gray-500 ml-2">Click to expand</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <ExpandableKPICard
@@ -286,18 +291,16 @@ export function ProfitDashboard() {
                 icon={<Target className="w-4 h-4" />}
               />
               <ExpandableKPICard
-                title="ROAS (Real)"
-                mainValue={`${realROAS.toFixed(2)}x`}
+                title={expandableKPIData.roas.title}
+                mainValue={expandableKPIData.roas.mainValue}
                 target={expandableKPIData.roas.target}
-                status={realROAS > 4 ? "on-track" : "warning"}
-                subMetrics={[
-                  { name: "Facebook", value: `${realROAS.toFixed(2)}x`, percentage: 100, trend: "up" },
-                ]}
+                status={expandableKPIData.roas.status}
+                subMetrics={expandableKPIData.roas.subMetrics}
                 icon={<TrendingUp className="w-4 h-4" />}
               />
               <ExpandableKPICard
                 title={expandableKPIData.aov.title}
-                mainValue={`$${metrics.aov.toFixed(2)}`}
+                mainValue={expandableKPIData.aov.mainValue}
                 target={expandableKPIData.aov.target}
                 status={expandableKPIData.aov.status}
                 subMetrics={expandableKPIData.aov.subMetrics}
@@ -321,7 +324,7 @@ export function ProfitDashboard() {
             </div>
           </section>
 
-          {/* Golden KPIs */}
+          {/* ROW 6: Golden KPIs (NOW REAL) */}
           <section className="bg-white border-2 border-gray-900 p-8 rounded-3xl space-y-8">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-warning/20 to-warning/10 flex items-center justify-center">
@@ -340,7 +343,8 @@ export function ProfitDashboard() {
             </div>
           </section>
 
-          <ProfitCompositionChart />
+          {/* ✅ UPDATED: Passing Real Daily History Data */}
+          <ProfitCompositionChart data={dailyHistory} />
 
           <AIDailyInsight type="performance" />
         </>

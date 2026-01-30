@@ -1,265 +1,206 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
-import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
-import { Layers } from "lucide-react"
+import { useMemo } from "react"
+import { 
+  ComposedChart, 
+  Area, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer, 
+  CartesianGrid 
+} from "recharts"
+import { Layers, TrendingUp } from "lucide-react"
+import { DailyMetric } from "@/hooks/use-cfo-data"
 
-const generateChartData = () => {
-  const data = []
-
-  const baseColdTraffic = 2913
-  const baseMrr = 1200
-  const baseAdSpend = 614
-  const cogsRate = 0.25
-  const weeklyMrrGrowth = 0.015
-
-  for (let i = 1; i <= 30; i++) {
-    const weekNumber = Math.floor((i - 1) / 7)
-    const mrrGrowthFactor = 1 + weeklyMrrGrowth * weekNumber
-    const dailyMrrVariation = 0.98 + Math.random() * 0.04
-    const mrr = Math.round(baseMrr * mrrGrowthFactor * dailyMrrVariation)
-
-    const isWeekend = [6, 7, 13, 14, 20, 21, 27, 28].includes(i)
-    const dailyFluctuation = -300 + Math.random() * 600
-    const weekendBoost = isWeekend ? 400 : 0
-    const trendBoost = i * 8
-    const coldTraffic = Math.round(baseColdTraffic + dailyFluctuation + weekendBoost + trendBoost)
-
-    const totalRevenue = coldTraffic + mrr
-
-    const adSpendVariation = isWeekend ? 80 : 0
-    const adSpend = Math.round(baseAdSpend + (-50 + Math.random() * 100) + adSpendVariation)
-    const cogs = Math.round(totalRevenue * cogsRate)
-    const totalCosts = adSpend + cogs
-
-    const profit = totalRevenue - totalCosts
-
-    data.push({
-      day: i,
-      coldTraffic,
-      mrr,
-      totalRevenue,
-      totalCosts,
-      profit,
-      adSpend,
-      cogs,
-    })
-  }
-  return data
+interface ProfitCompositionChartProps {
+  data?: DailyMetric[]
 }
 
-interface CustomTooltipProps {
-  active?: boolean
-  payload?: Array<{
-    value: number
-    dataKey: string
-    color: string
-  }>
-  label?: number
-}
+export function ProfitCompositionChart({ data = [] }: ProfitCompositionChartProps) {
+  
+  // 1. Transform Data for Charting
+  // We calculate "Total Costs" dynamically so we can draw the red line
+  const chartData = useMemo(() => {
+    if (!data || data.length === 0) return []
+    
+    return data.map(day => ({
+      ...day,
+      // Costs = Revenue - Net Profit
+      totalCosts: day.revenue - day.profit, 
+      // Format date for X-Axis (e.g., "Jan 15")
+      displayDate: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    }))
+  }, [data])
 
-function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
-  if (!active || !payload || !payload.length) return null
-
-  const totalRevenue = payload.find((p) => p.dataKey === "totalRevenue")?.value || 0
-  const totalCosts = payload.find((p) => p.dataKey === "totalCosts")?.value || 0
-  const coldTraffic = payload.find((p) => p.dataKey === "coldTraffic")?.value || 0
-  const mrr = payload.find((p) => p.dataKey === "mrr")?.value || 0
-  const profit = totalRevenue - totalCosts
-  const margin = ((profit / totalRevenue) * 100).toFixed(1)
-
-  return (
-    <div className="bg-white border-2 border-gray-900 rounded-xl p-4 shadow-2xl min-w-[220px]">
-      <p className="text-xs text-gray-600 mb-3 font-semibold uppercase tracking-wide">Day {label}</p>
-
-      <div className="mb-3 p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-emerald-600 uppercase">Daily Profit</span>
-          <span className="text-lg font-black text-emerald-600">${profit.toLocaleString()}</span>
-        </div>
-        <p className="text-[10px] text-emerald-600/70 mt-1">{margin}% margin</p>
-      </div>
-
-      <div className="space-y-2 text-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-emerald-400/30 border border-emerald-400" />
-            <span className="text-gray-600">Total Revenue</span>
-          </div>
-          <span className="font-semibold text-gray-900">${totalRevenue.toLocaleString()}</span>
-        </div>
-        <div className="flex items-center justify-between pl-5 opacity-70">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
-            <span className="text-gray-600">Cold Traffic</span>
-          </div>
-          <span className="font-medium">${coldTraffic.toLocaleString()}</span>
-        </div>
-        <div className="flex items-center justify-between pl-5 opacity-70">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-gray-600">MRR</span>
-          </div>
-          <span className="font-medium">${mrr.toLocaleString()}</span>
-        </div>
-        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-rose-400/30 border border-rose-400" />
-            <span className="text-gray-600">Total Costs</span>
-          </div>
-          <span className="font-semibold text-gray-900">${totalCosts.toLocaleString()}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export function ProfitCompositionChart() {
-  // 1. Add "mounted" state to prevent server/client mismatch
-  const [mounted, setMounted] = useState(false)
-
-  // 2. Set mounted to true only after component loads in browser
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const chartData = useMemo(() => generateChartData(), [])
-
+  // 2. Calculate Totals for the Header
   const totals = useMemo(() => {
+    if (chartData.length === 0) return { totalProfit: 0, avgMargin: "0.0" }
+    
     const totalProfit = chartData.reduce((sum, d) => sum + d.profit, 0)
-    const totalRevenue = chartData.reduce((sum, d) => sum + d.totalRevenue, 0)
-    const avgDailyProfit = Math.round(totalProfit / 30)
-    const avgMargin = ((totalProfit / totalRevenue) * 100).toFixed(1)
-    return { totalProfit, avgDailyProfit, avgMargin }
+    const totalRevenue = chartData.reduce((sum, d) => sum + d.revenue, 0)
+    const avgMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : "0.0"
+    
+    return { totalProfit, avgMargin }
   }, [chartData])
 
-  // 3. Show a loading skeleton if not mounted yet
-  if (!mounted) {
-    return <div className="h-[500px] w-full bg-gray-100/50 animate-pulse rounded-2xl" />
+  // 3. Loading State (If no data yet)
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div className="h-[400px] w-full bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 gap-2">
+         <Layers className="w-8 h-8 opacity-20" />
+         <p className="text-sm font-medium">Waiting for data...</p>
+      </div>
+    )
   }
 
   return (
-    <section className="bg-white border-2 border-gray-900 rounded-2xl p-6 space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-            <Layers className="w-5 h-5 text-gray-600" />
+    <section className="bg-white border-2 border-gray-900 rounded-3xl p-8 shadow-sm space-y-8 animate-in fade-in duration-500">
+      
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 flex items-center justify-center">
+            <TrendingUp className="w-6 h-6 text-emerald-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Profit Composition</h2>
-            <p className="text-sm text-gray-600">30-day revenue vs costs breakdown</p>
+            <h2 className="text-xl font-bold text-gray-900">Profit Composition</h2>
+            <p className="text-sm text-gray-500 font-medium">Real-time revenue vs costs breakdown</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-sm">
+        {/* Summary Stats */}
+        <div className="flex items-center gap-6 bg-gray-50 px-6 py-3 rounded-xl border border-gray-100">
           <div className="text-right">
-            <p className="text-gray-600">30-Day Profit</p>
-            <p className="text-xl font-bold text-gray-900">${totals.totalProfit.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Net Profit</p>
+            <p className="text-2xl font-black text-gray-900">${totals.totalProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
           </div>
-          <div className="h-10 w-px bg-gray-300" />
+          <div className="h-10 w-px bg-gray-200" />
           <div className="text-right">
-            <p className="text-gray-600">Margin</p>
-            <p className="text-xl font-bold text-emerald-500">{totals.avgMargin}%</p>
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Margin</p>
+            <p className={`text-2xl font-black ${Number(totals.avgMargin) > 20 ? 'text-emerald-500' : 'text-amber-500'}`}>
+              {totals.avgMargin}%
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-5 text-xs text-gray-600">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-sm bg-emerald-500/40 border border-emerald-500" />
-          <span>Profit Zone</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-0.5 rounded bg-rose-500" />
-          <span>Total Costs</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-0.5 rounded bg-cyan-400" />
-          <span>Cold Traffic</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-0.5 rounded bg-amber-400" />
-          <span>MRR</span>
-        </div>
-      </div>
-
-      <div className="h-[340px] w-full">
+      {/* The Chart */}
+      <div className="h-[350px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
             <defs>
-              <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgb(16, 185, 129)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="rgb(16, 185, 129)" stopOpacity={0.05} />
+              <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10B981" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
               </linearGradient>
             </defs>
 
-            <XAxis
-              dataKey="day"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: "#6b7280", fontSize: 10 }}
-              tickFormatter={(value) => `${value}`}
-              interval={4}
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+            
+            <XAxis 
+              dataKey="displayDate" 
+              axisLine={false} 
+              tickLine={false} 
+              tick={{ fill: "#9CA3AF", fontSize: 11 }}
+              minTickGap={30}
             />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: "#6b7280", fontSize: 10 }}
-              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-              width={45}
-              domain={[0, 5000]}
+            
+            <YAxis 
+              axisLine={false} 
+              tickLine={false} 
+              tick={{ fill: "#9CA3AF", fontSize: 11 }}
+              tickFormatter={(value) => `$${value/1000}k`}
             />
 
             <Tooltip content={<CustomTooltip />} />
 
+            {/* Revenue Area (Green) */}
             <Area
               type="monotone"
-              dataKey="totalRevenue"
-              stroke="rgb(16, 185, 129)"
-              strokeWidth={2}
-              fill="url(#profitGradient)"
+              dataKey="revenue"
+              stroke="#10B981"
+              strokeWidth={3}
+              fill="url(#revenueGradient)"
+              activeDot={{ r: 6, fill: "#10B981", strokeWidth: 0 }}
             />
 
+            {/* Costs Line (Red Dashed) */}
             <Line
               type="monotone"
               dataKey="totalCosts"
-              stroke="rgb(239, 68, 68)"
-              strokeWidth={2.5}
+              stroke="#EF4444"
+              strokeWidth={2}
+              strokeDasharray="4 4"
               dot={false}
-              strokeDasharray="6 3"
-            />
-
-            <Line
-              type="monotone"
-              dataKey="coldTraffic"
-              stroke="rgb(34, 211, 238)"
-              strokeWidth={1.5}
-              dot={false}
-              strokeOpacity={0.8}
-            />
-
-            <Line
-              type="monotone"
-              dataKey="mrr"
-              stroke="rgb(251, 191, 36)"
-              strokeWidth={1.5}
-              dot={false}
-              strokeOpacity={0.8}
+              activeDot={{ r: 4, fill: "#EF4444" }}
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center gap-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
-        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-        <span>
-          <span className="text-gray-900 font-medium">Profit</span> = Green shaded area above the red dashed cost line
-        </span>
-        <span className="mx-2 text-gray-300">|</span>
-        <span>
-          <span className="text-cyan-500 font-medium">Cold Traffic</span> stays above costs = front-end profitable
-        </span>
+      {/* Legend / Footer */}
+      <div className="flex items-center gap-6 pt-4 border-t border-gray-100 text-xs font-medium text-gray-500">
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-emerald-500" />
+          <span>Total Revenue</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-1 rounded-full bg-red-500" />
+          <span>Total Costs (Ads + COGS)</span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="px-2 py-1 rounded bg-emerald-100 text-emerald-700">
+             Gap = Net Profit
+          </span>
+        </div>
       </div>
     </section>
+  )
+}
+
+// Custom Tooltip Component
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload || !payload.length) return null
+
+  const data = payload[0].payload
+  const revenue = data.revenue
+  const costs = data.totalCosts
+  const profit = data.profit
+  const margin = data.margin.toFixed(1)
+  const adSpend = data.adSpend
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-xl min-w-[200px]">
+      <p className="text-xs text-gray-400 font-semibold uppercase mb-3">{label}</p>
+      
+      <div className="space-y-3">
+        {/* Profit Section */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-50">
+           <span className="text-sm font-bold text-gray-700">Net Profit</span>
+           <div className="text-right">
+             <span className="block text-sm font-bold text-emerald-600">+${profit.toLocaleString()}</span>
+             <span className="block text-[10px] text-gray-400">{margin}% Margin</span>
+           </div>
+        </div>
+
+        {/* Details */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Revenue</span>
+            <span className="font-medium text-gray-900">${revenue.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+             <span className="text-gray-500">Ad Spend</span>
+             <span className="font-medium text-red-500">-${adSpend.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+             <span className="text-gray-500">Est. Costs</span>
+             <span className="font-medium text-red-400">-${(costs - adSpend).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
