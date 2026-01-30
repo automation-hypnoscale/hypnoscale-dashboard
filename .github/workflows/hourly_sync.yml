@@ -2,8 +2,8 @@ name: Hourly Sales Sync
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour at minute 0
-  workflow_dispatch: # Allows you to click a button to run it manually
+    - cron: '0 * * * *' # Runs every hour
+  workflow_dispatch:    # Allows manual button click
 
 jobs:
   sync-sales:
@@ -18,12 +18,16 @@ jobs:
           python-version: '3.9'
 
       - name: Install libraries
-        run: pip install -r requirements.txt
+        # We install directly to ensure it works without needing a requirements.txt file
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests python-dotenv supabase
 
       - name: Run Data Sync
         env:
-        SYNC_DAYS: "3"        # <--- Make sure this is here!
-          PYTHONUNBUFFERED: "1"        # <--- Add this!
+          # All these variables must be aligned perfectly under 'env:'
+          SYNC_DAYS: "3"
+          PYTHONUNBUFFERED: "1"
           CHECKOUT_CHAMP_ID: ${{ secrets.CHECKOUT_CHAMP_ID }}
           CHECKOUT_CHAMP_PASS: ${{ secrets.CHECKOUT_CHAMP_PASS }}
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
@@ -32,4 +36,4 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           python scripts/backfill_sales.py
-          python scripts/sync_fb_ads.py
+          # python scripts/sync_fb_ads.py  <-- Uncomment this line when you are ready to sync Ads too!
