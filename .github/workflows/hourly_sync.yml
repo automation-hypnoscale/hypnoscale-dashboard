@@ -1,0 +1,30 @@
+name: Hourly Sales Sync
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs every hour at minute 0
+  workflow_dispatch: # Allows you to click a button to run it manually
+
+jobs:
+  sync-sales:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install libraries
+        run: pip install -r requirements.txt
+
+      - name: Run Sales Sync
+        env:
+          # This maps the secrets to the script
+          CHECKOUT_CHAMP_ID: ${{ secrets.CHECKOUT_CHAMP_ID }}
+          CHECKOUT_CHAMP_PASS: ${{ secrets.CHECKOUT_CHAMP_PASS }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: python3 scripts/backfill_sales.py
