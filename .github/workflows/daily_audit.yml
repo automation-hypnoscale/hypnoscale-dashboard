@@ -34,3 +34,12 @@ jobs:
 
       - name: Run Refund Sweep
         run: python scripts/backfill_sales.py
+
+      # Add this to the bottom of your existing steps
+      - name: Generate AI Daily Insights
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          CHECKOUT_CHAMP_ID: ${{ secrets.CHECKOUT_CHAMP_ID }}
+          CHECKOUT_CHAMP_PASS: ${{ secrets.CHECKOUT_CHAMP_PASS }}
+        run: python3 scripts/generate_insights.py
